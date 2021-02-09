@@ -1,0 +1,140 @@
+   1              	# 1 "../init.S"
+   1              	
+   0              	
+   0              	
+   0              	
+   2              	
+   3              	    .extern main
+   4              		.global start
+   5              		
+   6              		/*
+   7              		** Modos de operaci�n
+   8              		*/
+   9              		.equ MODEMASK, 0x1f		/* Para selecci�n de M[4:0] del CPSR */
+  10              		.equ USRMODE,  0x10
+  11              		.equ FIQMODE,  0x11
+  12              		.equ IRQMODE,  0x12
+  13              		.equ SVCMODE,  0x13
+  14              		.equ ABTMODE,  0x17
+  15              		.equ UNDMODE,  0x1b
+  16              		.equ SYSMODE,  0x1f
+  17              	
+  18              		/*
+  19              		** Direcciones de las bases de las pilas del sistema 
+  20              		*/
+  21              		.equ USRSTACK, 0xc7ff000   	
+  22              		.equ SVCSTACK, 0xc7ff100
+  23              		.equ UNDSTACK, 0xc7ff200
+  24              		.equ ABTSTACK, 0xc7ff300
+  25              		.equ IRQSTACK, 0xc7ff400
+  26              		.equ FIQSTACK, 0xc7ff500
+  27              	
+  28              		/*
+  29              		** Registro de m�scara de interrupci�n
+  30              		*/
+  31              		.equ rINTMSK,    0x1e0000c
+  32              	
+  33              	start:
+  34              	
+  35              		/* Pasa a modo supervisor */
+  36 0000 00000FE1 	    mrs	r0, cpsr
+  37 0004 1F00C0E3 	    bic	r0, r0, #MODEMASK
+  38 0008 131080E3 	    orr	r1, r0, #SVCMODE
+  39 000c 01F021E1 	    msr	cpsr_c, r1 
+  40              	
+  41              		/* Enmascara interrupciones */
+  42 0010 94009FE5 		ldr r0, =rINTMSK
+  43 0014 0E12E0E3 		ldr r1, =0x1fffffff
+  44 0018 001080E5 	    str r1, [r0]
+  45              	
+  46              		/* Habilita linea IRQ y FIQ del CPSR */
+  47 001c 00000FE1 		mrs r0, cpsr
+  48 0020 C000C0E3 		bic r0, r0, #0xC0
+  49 0024 00F021E1 		msr cpsr_c, r0
+  50              		
+  51              		/* Inicialización de la sección bss a 0, estándar C */
+  52 0028 80309FE5 	    ldr	    r3, =Image_ZI_Base
+  53 002c 80109FE5 		ldr	    r1, =Image_ZI_Limit	/* Top of zero init segment */
+  54 0030 0020A0E3 	    mov	    r2, #0
+  55              	L0:
+  56 0034 010053E1 	    cmp	    r3, r1	    		/* Zero init */
+  57 0038 04208334 	    strcc   r2, [r3], #4
+  58 003c FCFFFF3A 	    bcc	    L0
+  59              		/****************************************************/
+  60              	
+  61              		/* Desde modo SVC inicializa los SP de todos los modos de ejecuci�n privilegiados */
+  62 0040 070000EB 	    bl InitStacks
+  63              		
+  64              		/* Desde modo SVC cambia a modo USR e inicializa el SP_usr */
+  65 0044 00000FE1 		mrs r0, cpsr
+  66 0048 1F00C0E3 		bic r0, r0, #MODEMASK
+  67 004c 101080E3 		orr r1, r0, #USRMODE  
+  68 0050 01F021E1 		msr cpsr_c, r1
+  69 0054 5CD09FE5 		ldr sp, =USRSTACK
+  70              	
+  71 0058 00B0A0E3 	    mov fp, #0
+  72              	
+  73 005c FEFFFFEB 	    bl main
+  74              	
+  75              	End:
+  76 0060 FEFFFFEA 	    B End
+  77              	
+  78              	InitStacks:
+  79 0064 00000FE1 		mrs r0, cpsr
+  80 0068 1F00C0E3 		bic r0, r0, #MODEMASK
+  81              	
+  82 006c 1B1080E3 		orr r1, r0, #UNDMODE  /* desde modo SVC cambia a modo UND e inicializa el SP_und */
+  83 0070 01F021E1 		msr cpsr_c, r1    
+  84 0074 40D09FE5 		ldr sp, =UNDSTACK
+  85              	
+  86 0078 171080E3 		orr r1, r0, #ABTMODE  /* desde modo UND cambia a modo ABT e inicializa el SP_abt */
+  87 007c 01F021E1 		msr cpsr_c, r1 
+  88 0080 38D09FE5 		ldr sp, =ABTSTACK
+  89              	
+  90 0084 121080E3 		orr r1, r0, #IRQMODE  /* desde modo ABT cambia a modo IRQ e inicializa el SP_abt */
+  91 0088 01F021E1 		msr cpsr_c, r1
+  92 008c 30D09FE5 		ldr sp, =IRQSTACK
+  93              	
+  94 0090 111080E3 		orr r1, r0, #FIQMODE  /* desde modo IRQ cambia a modo FIQ e inicializa el SP_fiq */
+  95 0094 01F021E1 		msr cpsr_c, r1
+  96 0098 28D09FE5 		ldr sp, =FIQSTACK
+  97              	
+  98 009c 131080E3 		orr r1, r0, #SVCMODE  /* desde modo FIQ cambia a modo SVC e inicializa el SP_svc */
+  99 00a0 01F021E1 		msr cpsr_c, r1
+ 100 00a4 20D09FE5 		ldr sp, =SVCSTACK
+ 101              		
+ 102 00a8 0EF0A0E1 	    mov pc, lr
+ 103              	
+ 104 00ac 0C00E001 		.end
+ 104      00000000 
+ 104      00000000 
+ 104      00F07F0C 
+ 104      00F27F0C 
+DEFINED SYMBOLS
+           ../init.S:33     .text:00000000 start
+           ../init.S:9      *ABS*:0000001f MODEMASK
+           ../init.S:10     *ABS*:00000010 USRMODE
+           ../init.S:11     *ABS*:00000011 FIQMODE
+           ../init.S:12     *ABS*:00000012 IRQMODE
+           ../init.S:13     *ABS*:00000013 SVCMODE
+           ../init.S:14     *ABS*:00000017 ABTMODE
+           ../init.S:15     *ABS*:0000001b UNDMODE
+           ../init.S:16     *ABS*:0000001f SYSMODE
+           ../init.S:21     *ABS*:0c7ff000 USRSTACK
+           ../init.S:22     *ABS*:0c7ff100 SVCSTACK
+           ../init.S:23     *ABS*:0c7ff200 UNDSTACK
+           ../init.S:24     *ABS*:0c7ff300 ABTSTACK
+           ../init.S:25     *ABS*:0c7ff400 IRQSTACK
+           ../init.S:26     *ABS*:0c7ff500 FIQSTACK
+           ../init.S:31     *ABS*:01e0000c rINTMSK
+           ../init.S:36     .text:00000000 $a
+           ../init.S:55     .text:00000034 L0
+           ../init.S:78     .text:00000064 InitStacks
+           ../init.S:75     .text:00000060 End
+           ../init.S:104    .text:000000ac $d
+                   .debug_aranges:0000000c $d
+
+UNDEFINED SYMBOLS
+Image_ZI_Base
+Image_ZI_Limit
+main
